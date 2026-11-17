@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/omarchy/omarchy/main/schemas/plugin.json",
+  "schemaVersion": 1,
+  "id": "menelaostx99.ripe",
+  "name": "Ripe",
+  "version": "1.0.0",
+  "author": "menelaostX99",
+  "license": "MIT",
+  "repository": "https://github.com/menelaostX99/ripe",
+  "description": "A tomato in your bar that ripens while you focus. Deep-work sessions, a full-screen time's-up moment, and Blanket's ambient soundscapes mixed right in the popup.",
+  "kinds": [
+    "service",
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "Widget.qml"
+  },
+  "barWidget": {
+    "displayName": "Ripe",
+    "description": "Focus timer with a built-in ambient soundscape",
+    "category": "Productivity",
+    "allowMultiple": false,
+    "defaultSection": "centerEnd"
+  }
+}

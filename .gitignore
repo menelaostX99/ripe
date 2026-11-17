@@ -1,0 +1,4 @@
+*.bak
+*.part
+.DS_Store
+.claude/

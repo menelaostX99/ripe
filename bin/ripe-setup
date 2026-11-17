@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# Prepares Ripe's directories and unpacks Blanket's sounds and icons from its
+# GResource bundle into the cache, where the shell can play them. Prints
+# "ready" when every sound is in place and "missing" when Blanket (or the
+# gresource tool) is not installed. Blanket's own files are only read.
+
+set -u
+
+config_dir=$1
+state_dir=$2
+cache_dir=$3
+# Blanket from the system package, or from Flatpak (system-wide or per user).
+bundle=
+for candidate in \
+  /usr/share/blanket/blanket.gresource \
+  /var/lib/flatpak/app/com.rafaelmardojai.Blanket/current/active/files/share/blanket/blanket.gresource \
+  "${XDG_DATA_HOME:-$HOME/.local/share}/flatpak/app/com.rafaelmardojai.Blanket/current/active/files/share/blanket/blanket.gresource"; do
+  if [[ -r $candidate ]]; then
+    bundle=$candidate
+    break
+  fi
+done
+prefix=/com/rafaelmardojai/Blanket
+
+sounds=(rain storm wind waves stream birds summer-night fireplace coffee-shop city train boat white-noise pink-noise)
+
+mkdir -p "$config_dir" "$state_dir" "$cache_dir/sounds" "$cache_dir/icons"
+
+if [[ -z $bundle ]] || ! command -v gresource >/dev/null; then
+  echo missing
+  exit 0
+fi
+
+# Unpack again when Blanket has been updated since the last time.
+stamp="$cache_dir/sounds/.stamp"
+fresh=1
+[[ -e $stamp && ! $bundle -nt $stamp ]] || fresh=0
+
+ok=1
+for sound in "${sounds[@]}"; do
+  ogg="$cache_dir/sounds/$sound.ogg"
+  svg="$cache_dir/icons/$sound.svg"
+  if (( ! fresh )) || [[ ! -s $ogg ]]; then
+    gresource extract "$bundle" "$prefix/sounds/$sound.ogg" >"$ogg.part" 2>/dev/null && mv -f "$ogg.part" "$ogg"
+    rm -f "$ogg.part"
+  fi
+  if (( ! fresh )) || [[ ! -s $svg ]]; then
+    gresource extract "$bundle" "$prefix/icons/scalable/emblems/com.rafaelmardojai.Blanket-$sound-symbolic.svg" >"$svg.part" 2>/dev/null && mv -f "$svg.part" "$svg"
+    rm -f "$svg.part"
+  fi
+  [[ -s $ogg ]] || ok=0
+done
+
+if (( ok )); then
+  touch "$stamp"
+  echo ready
+else
+  echo missing
+fi
