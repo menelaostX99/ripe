@@ -8,7 +8,7 @@ work. When the time is up, Ripe makes sure you notice: the whole screen dims,
 your desktop still visible beneath, and a single quiet message tells you to
 step away.
 
-![Ripe's popup: the focus dial on the left, the soundscape mixer on the right](preview.png)
+![Ripe in action: a focus session running in the Omarchy bar](https://github.com/menelaostX99/ripe/releases/download/v1.0.0/ripe_preview.gif)
 
 ## What it does
 
@@ -30,6 +30,8 @@ step away.
 - **Keyboard first, scriptable everywhere.** Every action has a key in the
   popup and a command for your bindings.
 - **Private.** No network requests, no tracking, no history.
+
+![Ripe's popup: the focus dial on the left, the soundscape mixer on the right](preview.png)
 
 ## Install
 
