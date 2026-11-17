@@ -63,6 +63,23 @@ hl.layer_rule({
 })
 ```
 
+## Remove
+
+```bash
+omarchy plugin remove menelaostx99.ripe
+```
+
+This removes Ripe from the bar and deletes the plugin. Your settings, timer
+state, and unpacked sounds stay behind (see [Files](#files)); to clear them too:
+
+```bash
+rm -rf ~/.config/ripe ~/.local/state/ripe ~/.cache/ripe
+```
+
+If you added the blur rule above, delete it from `~/.config/hypr/looknfeel.lua`.
+Blanket stays installed; remove it with `omarchy pkg remove blanket` if you no
+longer want it.
+
 ## Keys
 
 With the popup open:
