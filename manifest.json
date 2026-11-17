@@ -21,6 +21,6 @@
     "description": "Focus timer with a built-in ambient soundscape",
     "category": "Productivity",
     "allowMultiple": false,
-    "defaultSection": "centerEnd"
+    "defaultSection": "center"
   }
 }
