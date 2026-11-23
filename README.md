@@ -8,7 +8,7 @@ work. When the time is up, Ripe makes sure you notice: the whole screen dims,
 your desktop still visible beneath, and a single quiet message tells you to
 step away.
 
-![Ripe in action: a focus session running in the Omarchy bar](https://github.com/menelaostX99/ripe/releases/download/v1.0.0/ripe_preview.gif)
+![Ripe in action: a focus session running in the Omarchy bar](https://github.com/menelaostX99/ripe/releases/download/v1.1.0/ripe_preview.gif)
 
 ## What it does
 
