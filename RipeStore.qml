@@ -29,10 +29,18 @@ Item {
   property real pausedMs: 0
   property real plannedMs: 0
 
+  // A session began from rest, and a phase ran out: the panel and the bar
+  // mark both moments.
+  signal started()
+  signal finished(string phase)
+
   // Which phase just ran out, "" when nothing is waiting to be acknowledged.
   // The time's-up screen (Service.qml) is up for as long as this is set.
   property string alert: ""
   property int alertMinutes: 0
+  // A time's-up screen that is waiting for the lock screen to go away.
+  property string heldAlert: ""
+  property int heldAlertMinutes: 0
 
   property bool settingsLoaded: false
   property bool stateLoaded: false
@@ -44,7 +52,12 @@ Item {
   readonly property bool running: status === "running"
   readonly property bool paused: status === "paused"
   readonly property bool idle: status === "idle"
+  readonly property bool focusing: running && phase === "focus"
+  readonly property bool loaded: settingsLoaded && stateLoaded
   readonly property real phaseMs: Number(settings[phase]) * 60000
+  // The length of the session on the clock, which "+5" may have moved away
+  // from the saved length of its phase.
+  readonly property int sessionMinutes: idle ? Number(settings[phase]) : Math.max(1, Math.round(plannedMs / 60000))
   readonly property real totalMs: idle ? phaseMs : Math.max(1, plannedMs)
   readonly property real remainingMs: running ? Math.max(0, endsAt - now) : paused ? pausedMs : phaseMs
   readonly property real progress: idle ? 0 : Math.max(0, Math.min(1, 1 - remainingMs / totalMs))
@@ -73,31 +86,111 @@ Item {
     return activeSounds.indexOf(id) >= 0
   }
 
+  // ---- quiet and awake
+  // While a focus session runs, Ripe can silence notifications and keep the
+  // screen from sleeping. Both are Omarchy's own switches, the ones behind
+  // the bell and the mug among the bar's indicators, so what Ripe has done
+  // shows there. Each is flipped only when it was off and handed back when
+  // focus ends; `held` remembers which are Ripe's to hand back, across a
+  // shell restart. (A Wayland idle inhibitor of Ripe's own would be more
+  // self-contained, but Hyprland does not honour one held by a shell
+  // surface, so it would not keep anything awake.)
+  property bool heldDnd: false
+  property bool heldAwake: false
+  readonly property bool wantDnd: loaded && settings.focusDnd && focusing
+  readonly property bool wantAwake: loaded && settings.keepAwake && focusing
+  property int syncTries: 0
+
+  // Calls one of the shell's own IPC handlers in-process. Returns its
+  // answer, or null when the shell has no such handler (yet).
+  function ask(target, method, args) {
+    try {
+      var result = IpcRegistry.call(target, method, args || [])
+      return result && result.ran ? String(result.output) : null
+    } catch (e) {
+      return null
+    }
+  }
+
+  function screenLocked() {
+    return ask("lock", "isLocked") === "true"
+  }
+
+  function syncSession() {
+    if (!loaded) return
+    var unanswered = false
+
+    if (wantDnd && !heldDnd) {
+      var dnd = ask("notifications", "isDnd")
+      if (dnd === null) unanswered = true
+      else if (dnd === "off" && ask("notifications", "setDnd", ["on"]) !== null) heldDnd = true
+    } else if (!wantDnd && heldDnd) {
+      if (ask("notifications", "setDnd", ["off"]) === null) unanswered = true
+      else heldDnd = false
+    }
+
+    if (wantAwake && !heldAwake) {
+      var answer = ask("idle", "status")
+      var awake = false
+      try { awake = JSON.parse(answer).stayAwake === true } catch (e) { awake = false }
+      if (answer === null) unanswered = true
+      else if (!awake && ask("idle", "disable") !== null) heldAwake = true
+    } else if (!wantAwake && heldAwake) {
+      if (ask("idle", "enable") === null) unanswered = true
+      else heldAwake = false
+    }
+
+    // The shell's services may come up after Ripe does.
+    if (unanswered && syncTries < 8) {
+      syncTries++
+      syncRetry.restart()
+    } else {
+      syncTries = 0
+    }
+  }
+
+  onWantDndChanged: syncSession()
+  onWantAwakeChanged: syncSession()
+  onHeldDndChanged: saveState()
+  onHeldAwakeChanged: saveState()
+
+  Timer {
+    id: syncRetry
+    interval: 1500
+    onTriggered: root.syncSession()
+  }
+
+
   // ---- settings mutators
   function update(patch) {
     settings = Model.sanitizeSettings(Object.assign({}, settings, patch))
     saveSettings()
   }
 
-  // A new length for a phase. Changing the phase that is on the clock moves
-  // its end by the same amount, so "+5" in the middle of a session adds five
-  // minutes instead of waiting for the next one.
+  // The saved length of a phase: what the next session of it will run for.
+  // A session already on the clock keeps the length it has.
   function setMinutes(key, minutes) {
     if (Model.PHASES.indexOf(key) < 0) return
-    var before = Number(settings[key])
-    update((function() { var p = {}; p[key] = minutes; return p })())
-    var delta = (Number(settings[key]) - before) * 60000
-    if (delta === 0 || key !== phase || idle) return
-    var floor = 1000
-    if (running) {
-      var left = Math.max(floor, endsAt - Date.now() + delta)
-      endsAt = Date.now() + left
-    } else {
-      pausedMs = Math.max(floor, pausedMs + delta)
-    }
-    plannedMs = Math.max(floor, plannedMs + delta)
-    tick()
-    saveState()
+    var patch = {}
+    patch[key] = minutes
+    update(patch)
+  }
+
+  // Lengthen or shorten the session on the clock, this once.
+  function extend(minutes) {
+    applyTimer(Model.adjust(timer(), Number(minutes) * 60000, Date.now()))
+  }
+
+  // Every length control in the panel: at rest it sets the saved length,
+  // and during a session it moves that session only.
+  function setLength(minutes) {
+    if (idle) setMinutes(phase, minutes)
+    else extend(Model.clampInt(minutes, phase) - plannedMs / 60000)
+  }
+
+  function nudge(minutes) {
+    if (idle) setMinutes(phase, Number(settings[phase]) + minutes)
+    else extend(minutes)
   }
 
   function toggleSound(id) {
@@ -114,6 +207,28 @@ Item {
     var patch = { levels: levels }
     if (!soundActive(id)) patch.active = activeSounds.concat([id])
     update(patch)
+  }
+
+  // ---- saved mixes
+  readonly property int currentMix: Model.currentMix(settings)
+
+  function saveMix(name) {
+    update(Model.withMix(settings, name))
+  }
+
+  function loadMix(name) {
+    update(Model.withMixLoaded(settings, name))
+  }
+
+  function deleteMix(name) {
+    update(Model.withoutMix(settings, name))
+  }
+
+  // Step through the saved mixes, one key press each.
+  function nextMix() {
+    var mixes = settings.mixes
+    if (mixes.length === 0) return
+    loadMix(mixes[(currentMix + 1) % mixes.length].name)
   }
 
   // The panel's play button: start or stop the mix right now, whatever the
@@ -133,36 +248,48 @@ Item {
   }
 
   // ---- timer
-  function tick() {
-    now = Date.now()
-    if (running && now >= endsAt) finish(false)
+  // The rules live in Model.js as plain functions; this is the value they
+  // work on, and the place their results are acted upon.
+  function timer() {
+    return { phase: phase, status: status, endsAt: endsAt, remainingMs: pausedMs, plannedMs: plannedMs }
   }
 
-  // Runs the current phase for `ms`, or picks a paused one back up.
-  function begin(ms) {
-    var left = paused && ms === undefined ? pausedMs : (ms === undefined ? phaseMs : ms)
-    if (!paused || ms !== undefined) {
-      plannedMs = left
-      muted = false
-    }
-    endsAt = Date.now() + left
-    status = "running"
+  function applyTimer(next) {
+    phase = next.phase
+    status = next.status
+    endsAt = next.endsAt
+    pausedMs = next.remainingMs
+    plannedMs = next.plannedMs
     tick()
+    syncSession()
     saveState()
+  }
+
+  // Wakes just after each whole second, so the clock's seconds turn over
+  // evenly instead of whenever a coarser timer happens to land.
+  function tick() {
+    now = Date.now()
+    if (!running) return
+    if (now >= endsAt) {
+      finish()
+      return
+    }
+    ticker.interval = ((endsAt - now - 1) % 1000) + 6
+    ticker.restart()
   }
 
   function start() {
     if (running) return
+    var fresh = idle
     alert = ""
-    begin()
+    heldAlert = ""
+    if (fresh) muted = false
+    applyTimer(Model.begin(timer(), settings, Date.now()))
+    if (fresh) started()
   }
 
   function pause() {
-    if (!running) return
-    pausedMs = Math.max(0, endsAt - Date.now())
-    status = "paused"
-    tick()
-    saveState()
+    applyTimer(Model.pause(timer(), Date.now()))
   }
 
   function toggle() {
@@ -172,19 +299,16 @@ Item {
   // Back to the start of the current phase.
   function reset() {
     alert = ""
-    status = "idle"
-    tick()
-    saveState()
+    heldAlert = ""
+    applyTimer(Model.idleTimer(phase))
   }
 
   // Jump to a phase, e.g. straight to a break.
   function selectPhase(next) {
     if (Model.PHASES.indexOf(next) < 0 || (next === phase && idle)) return
     alert = ""
-    phase = next
-    status = "idle"
-    tick()
-    saveState()
+    heldAlert = ""
+    applyTimer(Model.select(timer(), next))
   }
 
   // Leave the current phase early and line up the other one.
@@ -192,27 +316,35 @@ Item {
     selectPhase(Model.otherPhase(phase))
   }
 
-  // The phase ran out. `quiet` is for a session that ended while the shell
-  // was not running: nothing rings and nothing starts.
-  function finish(quiet) {
-    var finished = phase
-    var minutes = Math.max(1, Math.round(totalMs / 60000))
-    phase = Model.otherPhase(finished)
-    status = "idle"
-    var auto = phase === "focus" ? settings.autoFocus : settings.autoBreaks
-    if (!quiet && auto) {
-      begin()
-    } else {
-      tick()
-      saveState()
-    }
-    if (quiet) return
+  // The phase ran out.
+  function finish() {
+    var result = Model.finish(timer(), settings, Date.now())
+    if (result.auto) muted = false
+    applyTimer(result.timer)
+    finished(result.finished)
     if (settings.chime) Quickshell.execDetached(["pw-play", "--volume", "0.6", pluginDir + "/chime.wav"])
-    if (settings.overlay) {
-      alertMinutes = minutes
-      alert = finished
+    if (!settings.overlay) {
+      announce(result.finished)
+    } else if (screenLocked()) {
+      // The screen would come up over the lock screen and take its keys;
+      // it waits until the desktop is back.
+      heldAlertMinutes = result.minutes
+      heldAlert = result.finished
     } else {
-      announce(finished)
+      alertMinutes = result.minutes
+      alert = result.finished
+    }
+  }
+
+  Timer {
+    interval: 1000
+    repeat: true
+    running: root.heldAlert !== ""
+    onTriggered: {
+      if (root.screenLocked()) return
+      root.alertMinutes = root.heldAlertMinutes
+      root.alert = root.heldAlert
+      root.heldAlert = ""
     }
   }
 
@@ -230,7 +362,7 @@ Item {
   // The main button: get on with whatever comes next.
   function acceptAlert() {
     alert = ""
-    if (!running) begin()
+    if (!running) start()
   }
 
   // Not done yet: a few more minutes of the phase that just ended.
@@ -238,9 +370,8 @@ Item {
     var kind = alert
     if (kind === "") return
     alert = ""
-    phase = kind
-    status = "idle"
-    begin(Math.max(1, minutes) * 60000)
+    muted = false
+    applyTimer(Model.begin(Model.idleTimer(kind), settings, Date.now(), Math.max(1, minutes) * 60000))
   }
 
   // After focus: no break, straight back to work.
@@ -248,10 +379,11 @@ Item {
     var kind = alert
     alert = ""
     if (kind !== "focus") return
-    phase = "focus"
-    status = "idle"
-    tick()
-    saveState()
+    applyTimer(Model.idleTimer("focus"))
+  }
+
+  function notify(title, body) {
+    Quickshell.execDetached(["notify-send", "-a", "Ripe", "-i", pluginDir + "/tomato.svg", "-t", "8000", title, body])
   }
 
   // The fallback when the full-screen message is turned off.
@@ -259,7 +391,15 @@ Item {
     var title = finished === "focus" ? strings.t("alert.focus.title") : strings.t("alert.break.title")
     var body = (finished === "focus" ? strings.t("alert.focus.body") : strings.t("alert.break.body"))
       .arg(I18n.formatNumber(Number(settings[phase]), 0))
-    Quickshell.execDetached(["notify-send", "-a", "Ripe", "-i", pluginDir + "/tomato.svg", "-t", "8000", title, body])
+    notify(title, body)
+  }
+
+  // A session ran out while the shell was not running (a restart, a crash,
+  // a reboot). It is too late to ring, but not to say so.
+  function announceMissed(missed) {
+    var when = new Date(missed.endedAt).toLocaleTimeString(Qt.locale(I18n.formatLocale), Locale.ShortFormat)
+    notify(strings.t("missed.title"),
+      strings.tn("missed." + missed.phase, missed.minutes).arg(I18n.formatNumber(missed.minutes, 0)).arg(when))
   }
 
   function statusJson() {
@@ -267,11 +407,13 @@ Item {
       phase: phase,
       status: status,
       remaining: Math.ceil(remainingMs / 1000),
-      minutes: Number(settings[phase]),
+      minutes: sessionMinutes,
       alert: alert,
       sounds: audible,
       mix: activeSounds,
-      volume: Math.round(settings.master * 100)
+      volume: Math.round(settings.master * 100),
+      quiet: wantDnd,
+      awake: wantAwake
     })
   }
 
@@ -303,7 +445,9 @@ Item {
       status: status,
       endsAt: endsAt,
       remainingMs: pausedMs,
-      plannedMs: plannedMs
+      plannedMs: plannedMs,
+      heldDnd: heldDnd,
+      heldAwake: heldAwake
     }) + "\n")
   }
 
@@ -312,21 +456,19 @@ Item {
     try { parsed = JSON.parse(text) } catch (e) { parsed = {} }
     settings = Model.sanitizeSettings(parsed)
     settingsLoaded = true
+    syncSession()
   }
 
   function applyState(text) {
     var parsed = {}
     try { parsed = JSON.parse(text) } catch (e) { parsed = {} }
-    var state = Model.sanitizeState(parsed)
-    phase = state.phase
-    status = state.status
-    endsAt = state.endsAt
-    pausedMs = state.remainingMs
-    plannedMs = state.plannedMs
+    var held = Model.sanitizeState(parsed)
+    var restored = Model.restore(parsed, Date.now())
+    heldDnd = held.heldDnd
+    heldAwake = held.heldAwake
     stateLoaded = true
-    now = Date.now()
-    // A session whose end passed while the shell was down is over.
-    if (running && now >= endsAt) finish(true)
+    applyTimer(restored.timer)
+    if (restored.missed) announceMissed(restored.missed)
   }
 
   Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
@@ -366,27 +508,40 @@ Item {
   }
 
   Timer {
-    interval: 250
-    repeat: true
-    running: root.running
+    id: ticker
     onTriggered: root.tick()
   }
 
-  // One looping player per sound in the mix, alive only while it should be
-  // heard, so a silent Ripe holds no audio stream open.
+  // One looping player per sound in the mix, alive only while it is heard
+  // or fading away, so a silent Ripe holds no audio stream open.
   Instantiator {
     model: Model.SOUNDS
     delegate: Loader {
       id: slot
       required property string modelData
-      active: root.audible && root.soundActive(modelData)
+      readonly property bool wanted: root.audible && root.soundActive(modelData)
+      // Outlives `wanted` by the length of the fade-out.
+      property bool alive: false
+      onWantedChanged: {
+        if (wanted) alive = true
+        // Dropped before it was ever heard: there is no fade to wait for.
+        else if (!item || item.gain === 0) alive = false
+      }
+      Component.onCompleted: if (wanted) alive = true
+      function release() { if (!wanted) alive = false }
+
+      active: alive
       sourceComponent: Item {
         id: voice
-        // Fades in, so a sound joining the mix does not land at full volume.
+        // Fades in, so a sound joining the mix does not land at full volume,
+        // and out, so the end of a session is not a cut.
         property real gain: 0
-        Behavior on gain { NumberAnimation { duration: Style.duration(600); easing.type: Easing.OutCubic } }
+        Behavior on gain {
+          NumberAnimation { duration: Style.duration(slot.wanted ? 600 : 900); easing.type: Easing.OutCubic }
+        }
+        onGainChanged: if (gain === 0) Qt.callLater(slot.release)
         Component.onCompleted: {
-          gain = 1
+          gain = Qt.binding(function() { return slot.wanted ? 1 : 0 })
           player.play()
         }
 

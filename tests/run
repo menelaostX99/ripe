@@ -1,9 +1,9 @@
 #!/bin/bash
-# Runs the model tests and validates the manifest against Omarchy's schema.
+# Runs the model and string tests and validates the manifest against Omarchy's schema.
 set -e
 cd "$(dirname "$0")/.."
 node tests/model.test.js
-python3 -c "import json; json.load(open('i18n/en.json')); print('strings: ok')"
+node tests/strings.test.js
 if command -v omarchy >/dev/null; then
   omarchy plugin validate . && echo "manifest: ok"
 fi

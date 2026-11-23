@@ -19,10 +19,12 @@
   "sounds.title": "SOUNDSCAPE",
   "sounds.play": "Play the mix now",
   "sounds.stop": "Stop the sounds",
-  "sounds.hint": "Click a sound to mix it in. Drag across it or scroll to set its level.",
+  "sounds.hint": "Click a sound to mix it in. Drag across it or scroll to set its level. Right-click a saved mix to remove it.",
   "sounds.missing": "Ambient sounds come from Blanket, which is not installed. Add it with: omarchy pkg add blanket",
   "sounds.checking": "Getting the sounds ready…",
   "sounds.error": "%1 could not be played.",
+  "mix.save": "+ Save this mix",
+  "mix.name": "Name this mix",
   "sound.rain": "Rain",
   "sound.storm": "Storm",
   "sound.wind": "Wind",
@@ -43,14 +45,28 @@
   "option.autoBreaks": "Start the break automatically",
   "option.autoFocus": "Start the next focus automatically",
   "option.soundsWithFocus": "Play the mix while focusing",
+  "option.focusDnd": "Silence notifications while focusing",
+  "option.keepAwake": "Keep the screen awake while focusing",
   "option.chime": "Chime when time is up",
   "option.overlay": "Full-screen message when time is up",
-  "keys": "Space start or pause · S skip · R start over · E type minutes · ←→ ±1 · ↑↓ ±5 · M sounds · O options",
+  "key.toggle": "start or pause",
+  "key.skip": "skip",
+  "key.reset": "start over",
+  "key.phase": "focus or break",
+  "key.type": "type minutes",
+  "key.one": "1 minute",
+  "key.five": "5 minutes",
+  "key.sounds": "sounds",
+  "key.mix": "next mix",
+  "key.options": "options",
   "alert.ok": "OK",
   "alert.extend": "5 more minutes",
   "alert.focus.eyebrow": "FOCUS COMPLETE",
   "alert.focus.title": "Time's up",
-  "alert.focus.done": { "one": "%1 minute of focus done. Step away from the screen.", "other": "%1 minutes of focus done. Step away from the screen." },
+  "alert.focus.done": {
+    "one": "%1 minute of focus done. Step away from the screen.",
+    "other": "%1 minutes of focus done. Step away from the screen."
+  },
   "alert.focus.body": "Time for a %1-minute break.",
   "alert.focus.running": "Your break ends in %1",
   "alert.focus.accept": "Start the break",
@@ -58,9 +74,21 @@
   "alert.focus.keys": "Enter to continue · 5 for five more minutes · S to skip the break · Esc to close",
   "alert.break.eyebrow": "BREAK OVER",
   "alert.break.title": "Back to it",
-  "alert.break.done": { "one": "Your %1-minute break is over.", "other": "Your %1-minute break is over." },
+  "alert.break.done": {
+    "one": "Your %1-minute break is over.",
+    "other": "Your %1-minute break is over."
+  },
   "alert.break.body": "Ready for %1 minutes of focus?",
   "alert.break.running": "Focusing · %1 left",
   "alert.break.accept": "Start focusing",
-  "alert.break.keys": "Enter to continue · 5 for five more minutes · Esc to close"
+  "alert.break.keys": "Enter to continue · 5 for five more minutes · Esc to close",
+  "missed.title": "Ripe",
+  "missed.focus": {
+    "one": "Your %1-minute focus session ended at %2.",
+    "other": "Your %1-minute focus session ended at %2."
+  },
+  "missed.break": {
+    "one": "Your %1-minute break ended at %2.",
+    "other": "Your %1-minute break ended at %2."
+  }
 }

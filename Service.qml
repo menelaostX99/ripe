@@ -17,6 +17,9 @@ Item {
   // omarchy-shell menelaostx99.ripe.timer <toggle|start|pause|skip|reset|status>
   // omarchy-shell menelaostx99.ripe.timer phase <focus|break>
   // omarchy-shell menelaostx99.ripe.timer minutes <focus|break> <n>
+  // omarchy-shell menelaostx99.ripe.timer extend <minutes>
+  // omarchy-shell menelaostx99.ripe.timer mix <name>
+  // omarchy-shell menelaostx99.ripe.timer option <name> <on|off>
   // omarchy-shell menelaostx99.ripe.timer <sounds | sound <name> | volume <0-100>>
   // omarchy-shell menelaostx99.ripe.timer <timesup <focus|break> | dismiss>
   ShellIpc {
@@ -29,6 +32,14 @@ Item {
     function reset(): void { RipeStore.reset() }
     function phase(name: string): void { RipeStore.selectPhase(name) }
     function minutes(name: string, count: int): void { RipeStore.setMinutes(name, count) }
+    function extend(count: int): void { RipeStore.extend(count) }
+    function mix(name: string): void { RipeStore.loadMix(name) }
+    function option(name: string, value: string): void {
+      if (Model.FLAGS.indexOf(name) < 0) return
+      var patch = {}
+      patch[name] = value === "on" || value === "true" || value === "1"
+      RipeStore.update(patch)
+    }
     function sounds(): void { RipeStore.toggleAmbient() }
     function sound(name: string): void {
       if (Model.SOUNDS.indexOf(name) >= 0) RipeStore.toggleSound(name)

@@ -5,6 +5,7 @@ import qs.Commons as Commons
 
 // One sound in the mix. A click adds or removes it; dragging across the tile
 // or scrolling over it sets how loud it is, and the tile fills to that level.
+// While its sound plays, the fill slowly breathes.
 Item {
   id: root
 
@@ -14,6 +15,20 @@ Item {
   // Playing right now, as opposed to merely picked for the next session.
   property bool sounding: false
   property real level: 0.6
+  // How long one breath of a playing tile takes, in milliseconds. Tiles are
+  // given different ones so the mixer never pulses as a block.
+  property int tempo: 4000
+  // 0 to 1 and back while the sound plays: a sign of life, not a meter.
+  property real breath: 0
+  readonly property bool breathing: sounding && !Style.reduceMotion
+  onBreathingChanged: if (!breathing) breath = 0
+
+  SequentialAnimation on breath {
+    running: root.breathing
+    loops: Animation.Infinite
+    NumberAnimation { from: 0; to: 1; duration: root.tempo / 2; easing.type: Easing.InOutSine }
+    NumberAnimation { from: 1; to: 0; duration: root.tempo / 2; easing.type: Easing.InOutSine }
+  }
   property color foreground: Commons.Color.foreground
   property color accent: Commons.Color.accent
   property string fontFamily: Style.font.family
@@ -46,15 +61,19 @@ Item {
       anchors.margins: 1
       width: (parent.width - 2) * Math.max(0, Math.min(1, root.level))
       radius: Math.max(0, plate.radius - 1)
-      color: Util.alpha(root.accent, root.sounding ? 0.3 : 0.14)
+      color: Util.alpha(root.accent, root.sounding ? 0.22 + 0.16 * root.breath : 0.14)
       Behavior on width {
         enabled: !mouse.dragging
         NumberAnimation { duration: Style.duration(120); easing.type: Easing.OutCubic }
       }
-      Behavior on color { ColorAnimation { duration: Style.duration(200) } }
+      Behavior on color {
+        enabled: !root.breathing
+        ColorAnimation { duration: Style.duration(200) }
+      }
     }
 
-    // Lit while this sound is actually coming out of the speakers.
+    // With animations turned off the tile cannot breathe, so a dot says
+    // that this sound is actually coming out of the speakers.
     Rectangle {
       anchors.top: parent.top
       anchors.right: parent.right
@@ -63,8 +82,7 @@ Item {
       height: width
       radius: width / 2
       color: root.accent
-      opacity: root.sounding ? 1 : 0
-      Behavior on opacity { NumberAnimation { duration: Style.duration(200) } }
+      visible: root.sounding && Style.reduceMotion
     }
   }
 

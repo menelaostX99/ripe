@@ -13,20 +13,31 @@ step away.
 ## What it does
 
 - **Focus and break, your way.** Any length from 1 minute to 3 hours. Type it,
-  tap a preset, or scroll over the number. Change it mid-session and the
-  running clock moves with you.
+  tap a preset, or scroll over the number. Change it mid-session and only
+  that session moves: "five more minutes" today does not become your default.
 - **A time's-up moment you can't miss.** No toast in the corner: a full-screen
   message over your shaded desktop, with the next step one key away. Start the
-  break, take five more minutes, or skip it.
+  break, take five more minutes, or skip it. It ignores the keys you were
+  already typing when it arrived, waits for the lock screen to clear, and
+  during a break it shows a slow ring to breathe along with.
 - **A soundscape, built in.** Fourteen ambient sounds from
   [Blanket](https://github.com/rafaelmardojai/blanket): rain, storm, waves,
   fireplace, a coffee shop, a night train, and more. Click to layer them,
   drag across a tile to set its level. The mix fades in when you start
-  focusing and stops when you stop.
-- **A tomato that empties.** On the bar, Ripe drains as the session runs, with
-  the countdown beside it. Right-click to start or pause, middle-click to skip.
+  focusing and fades out when you stop. Save a mix you like under a name and
+  bring it back with a click or a key.
+- **Nothing gets in the way.** Optionally silence notifications and keep the
+  screen awake while you focus. Ripe flips Omarchy's own do-not-disturb and
+  stay-awake switches, only if they were off, and hands them back the moment
+  focus ends or pauses.
+- **A tomato that ripens.** On the bar, Ripe fills up as the session runs,
+  with the countdown beside it. Right-click to start or pause, middle-click
+  to skip.
 - **Looks like it belongs.** Follows your Omarchy theme's colours, font, and
   corners, and every animation respects reduced motion.
+- **Speaks your language.** English, Greek, German, French, Spanish, Italian,
+  Portuguese, Dutch, Danish, Swedish, Polish, Japanese, and Simplified
+  Chinese, following Omarchy's language setting.
 - **Keyboard first, scriptable everywhere.** Every action has a key in the
   popup and a command for your bindings.
 - **Private.** No network requests, no tracking, no history.
@@ -94,6 +105,7 @@ With the popup open:
 | ← → | One minute less or more |
 | ↑ ↓ | Five minutes more or less |
 | M | Play or stop the sounds |
+| N | Next saved mix |
 | O | Options |
 | Esc | Close |
 
@@ -108,7 +120,11 @@ omarchy-shell menelaostx99.ripe.timer toggle           # start or pause
 omarchy-shell menelaostx99.ripe.timer skip
 omarchy-shell menelaostx99.ripe.timer reset
 omarchy-shell menelaostx99.ripe.timer phase break      # focus | break
-omarchy-shell menelaostx99.ripe.timer minutes focus 50
+omarchy-shell menelaostx99.ripe.timer minutes focus 50  # the saved length
+omarchy-shell menelaostx99.ripe.timer extend 5          # this session only; -5 shortens
+omarchy-shell menelaostx99.ripe.timer mix "Rainy café"  # load a saved mix
+omarchy-shell menelaostx99.ripe.timer option focusDnd on   # any option, on or off
+omarchy-shell menelaostx99.ripe.timer option keepAwake on
 omarchy-shell menelaostx99.ripe.timer sounds           # play or stop the mix
 omarchy-shell menelaostx99.ripe.timer sound rain       # add or remove a sound
 omarchy-shell menelaostx99.ripe.timer volume 40
@@ -125,7 +141,7 @@ anything.
 
 | Path | Holds |
 | --- | --- |
-| `~/.config/ripe/settings.json` | Lengths, options, and your mix |
+| `~/.config/ripe/settings.json` | Lengths, options, your mix, and saved mixes |
 | `~/.local/state/ripe/state.json` | The running timer, so it survives a restart |
 | `~/.cache/ripe/` | Blanket's sounds and icons, unpacked from your install |
 
@@ -135,8 +151,12 @@ anything.
 tests/run
 ```
 
-After changing the plugin's files, restart the shell with
-`omarchy restart shell`.
+The timer's rules are plain functions in `Model.js`, tested under node along
+with the translation catalogs in `i18n/`. After changing the plugin's files,
+restart the shell with `omarchy restart shell`.
+
+To add a language, copy `i18n/en.json` to `i18n/<code>.json` and translate
+the values; anything left out falls back to English.
 
 ## Credits
 
